@@ -14,6 +14,7 @@
 #include "fs/fd.h"
 #include "kernel/elf.h"
 #include "kernel/vdso.h"
+#include "tools/ptraceomatic-config.h"
 
 #define ARGV_MAX 32 * PAGE_SIZE
 
@@ -202,7 +203,7 @@ static int elf_exec(struct fd *fd, const char *file, struct exec_args argv, stru
 
     current->mm->exefile = fd_retain(fd);
 
-    addr_t load_addr; // used for AX_PHDR
+    addr_t load_addr = 0; // used for AX_PHDR
     bool load_addr_set = false;
     addr_t bias = 0; // offset for loading shared libraries as executables
 
@@ -266,11 +267,10 @@ static int elf_exec(struct fd *fd, const char *file, struct exec_args argv, stru
     addr_t vdso_entry = current->mm->vdso + ((struct elf_header *) vdso_data)->entry_point;
 
     // map 3 empty "vvar" pages to satisfy ptraceomatic
-#define NUM_VVAR 3
-    page_t vvar_page = pt_find_hole(current->mem, NUM_VVAR);
+    page_t vvar_page = pt_find_hole(current->mem, VVAR_PAGES);
     if (vvar_page == BAD_PAGE)
         goto beyond_hope;
-    if ((err = pt_map_nothing(current->mem, vvar_page, NUM_VVAR, 0)) < 0)
+    if ((err = pt_map_nothing(current->mem, vvar_page, VVAR_PAGES, 0)) < 0)
         goto beyond_hope;
     mem_pt(current->mem, vvar_page)->data->name = "[vvar]";
 
@@ -598,11 +598,7 @@ int __do_execve(const char *file, struct exec_args argv, struct exec_args envp) 
     char threadname[16];
     strncpy(threadname, current->comm, sizeof(threadname)-1);
     threadname[15] = '\0';
-#if __APPLE__
-    pthread_setname_np(threadname);
-#else
-    pthread_setname_np(pthread_self(), threadname);
-#endif
+    set_thread_name(threadname);
 
     // cloexec
     // consider putting this in fd.c?

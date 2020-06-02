@@ -18,6 +18,10 @@
 #define str(x) _str(x)
 #define _str(x) #x
 
+// compiler checks
+#define is_clang(version) (__clang__ && __clang_major__ >= version)
+#define is_gcc(version) (__GNUC__ >= version)
+
 // keywords
 #define bits unsigned int
 #define forceinline inline __attribute__((always_inline))
@@ -30,11 +34,33 @@
 #define unlikely(x) __builtin_expect((x), 0)
 #define typecheck(type, x) ({type _x = x; x;})
 #define must_check __attribute__((warn_unused_result))
+#if is_gcc(7) || is_clang(10)
+#define fallthrough __attribute__((fallthrough))
+#else
+#define fallthrough
+#endif
+
 #if defined(__has_attribute) && __has_attribute(no_sanitize)
-#define __no_instrument __attribute__((no_sanitize("address", "thread", "undefined", "leak", "memory")))
+#define __no_instrument_msan
+#if defined(__has_feature)
+#if __has_feature(memory_sanitizer)
+#undef __no_instrument_msan
+#define __no_instrument_msan __attribute__((no_sanitize("memory"))
+#endif
+#endif
+#define __no_instrument __attribute__((no_sanitize("address", "thread", "undefined", "leak"))) __no_instrument_msan
 #else
 #define __no_instrument
 #endif
+
+#if is_gcc(8)
+#define __strncpy_safe __attribute__((nonstring))
+#else
+#define __strncpy_safe
+#endif
+
+#define zero_init(type) ((type[1]){}[0])
+#define pun(type, x) (((union {typeof(x) _; type a;}) (x)).a)
 
 #define UNUSED(x) UNUSED_##x __attribute__((unused))
 static inline void __use(int dummy __attribute__((unused)), ...) {}
@@ -53,6 +79,8 @@ static inline void __use(int dummy __attribute__((unused)), ...) {}
         tsc; \
     })
 #endif
+
+#define array_size(arr) (sizeof(arr)/sizeof((arr)[0]))
 
 // types
 typedef int64_t sqword_t;

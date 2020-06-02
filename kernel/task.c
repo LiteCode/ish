@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
@@ -94,6 +95,7 @@ void (*task_run_hook)(void) = NULL;
 
 static void *task_run(void *task) {
     current = task;
+    set_thread_name(current->comm);
     if (task_run_hook)
         task_run_hook();
     else

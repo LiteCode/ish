@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <math.h>
 #include "float80.h"
+#include "misc.h"
 
 typedef unsigned __int128 uint128_t;
 
@@ -34,7 +35,7 @@ static int unbias_denormal(unsigned exp) {
 
 __thread enum f80_rounding_mode f80_rounding_mode;
 
-static bool round_away_from_zero(sign) {
+static bool round_away_from_zero(int sign) {
     return (f80_rounding_mode == round_up && !sign) ||
         (f80_rounding_mode == round_down && sign);
 }
@@ -123,8 +124,10 @@ static float80 f80_normalize(float80 f) {
         return f;
     // shift left as many times as possible without overflow
     // number of leading zeroes = how many times we can shift out a leading digit before overflow
-    int shift = __builtin_clzl(f.signif);
-    if (f.signif == 0)
+    int shift;
+    if (f.signif != 0)
+        shift = __builtin_clzl(f.signif);
+    else
         shift = 64; // __builtin_clzl has undefined result with zero
     if (f.exp - shift < EXP_MIN) {
         // if we shifted this much, exponent would go below its minimum
@@ -138,10 +141,12 @@ static float80 f80_normalize(float80 f) {
 
 static int u128_clz(uint128_t x) {
     // correctly counting leading zeros on a 128-bit int is interesting
-    int zeros = __builtin_clzl((uint64_t) (x >> 64));
-    if (x >> 64 == 0)
+    int zeros;
+    if (x >> 64 != 0)
+        zeros = __builtin_clzl((uint64_t) (x >> 64));
+    else if (x != 0)
         zeros = 64 + __builtin_clzl((uint64_t) x);
-    if (x == 0)
+    else
         zeros = 128;
     return zeros;
 }
@@ -198,7 +203,7 @@ float80 f80_from_int(int64_t i) {
         f.exp = 0;
     if (i < 0) {
         f.sign = 1;
-        f.signif = -i;
+        f.signif = -(uint64_t) i;
     }
     return f80_normalize(f);
 }
@@ -460,9 +465,12 @@ float80 f80_div(float80 a, float80 b) {
         uint128_t signif = ((uint128_t) a.signif << 64) / b.signif;
         uint128_t remainder = ((uint128_t) a.signif << 64) % b.signif;
         // extend this to 128 bit precision because hell yeah
-        int extra_bits = u128_clz(signif);
-        signif <<= extra_bits;
-        signif |= (remainder << extra_bits) / b.signif;
+        int extra_bits = 0;
+        if (signif != 0) {
+            extra_bits = u128_clz(signif);
+            signif <<= extra_bits;
+            signif |= (remainder << extra_bits) / b.signif;
+        }
         int exp = unbias_denormal(a.exp) - unbias_denormal(b.exp) + 63 - b_trailing - extra_bits;
         f = u128_normalize_round(signif, exp, a.sign ^ b.sign);
     }
@@ -495,8 +503,8 @@ bool f80_lt(float80 a, float80 b) {
     if (f80_isinf(a) && f80_isinf(b) && a.sign == b.sign)
         return false;
     // zeroes are always equal
-    if (f80_iszero(a) && f80_iszero(b) && a.sign != b.sign)
-        return true;
+    if (f80_iszero(a) && f80_iszero(b))
+        return false;
     // if a < b then a - b < 0
     float80 diff = f80_sub(a, b);
     return diff.sign == 1 && !f80_iszero(diff);
@@ -550,6 +558,8 @@ float80 f80_log2(float80 x) {
 }
 
 float80 f80_sqrt(float80 x) {
+    if (f80_iszero(x))
+        return x;
     if (f80_isnan(x) || x.sign)
         return F80_NAN;
     // for a rough guess, just cut the exponent by 2

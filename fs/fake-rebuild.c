@@ -71,7 +71,7 @@ int fakefs_rebuild(struct mount *mount) {
     for (unsigned i = 0; i < HASH_SIZE; i++)
         list_init(&hashtable[i]);
 
-    while (sqlite3_step(get_paths) == SQLITE_ROW) {
+    while (STEP(get_paths)) {
         const char *path = (const char *) sqlite3_column_text(get_paths, 0);
         ino_t inode = sqlite3_column_int64(get_paths, 1);
 
@@ -112,7 +112,7 @@ int fakefs_rebuild(struct mount *mount) {
 
         // store all the information in the new database
         err = sqlite3_bind_int64(write_stat, 1, real_inode); CHECK_ERR();
-        err = sqlite3_bind_blob(write_stat, 2, stat_data, stat_data_size, SQLITE_TRANSIENT);
+        err = sqlite3_bind_blob(write_stat, 2, stat_data, stat_data_size, SQLITE_TRANSIENT); CHECK_ERR();
         STEP(write_stat);
         RESET(write_stat);
         err = sqlite3_bind_blob(write_path, 1, path, strlen(path), SQLITE_TRANSIENT); CHECK_ERR();

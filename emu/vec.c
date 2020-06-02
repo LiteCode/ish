@@ -46,6 +46,7 @@ VEC_ZERO_COPY(128, 128)
 VEC_ZERO_COPY(128, 64)
 VEC_ZERO_COPY(128, 32)
 VEC_ZERO_COPY(64, 64)
+VEC_ZERO_COPY(32, 32)
 
 void vec_merge32(NO_CPU, const void *src, void *dst) {
     memcpy(dst, src, 4);
@@ -57,7 +58,16 @@ void vec_merge128(NO_CPU, const void *src, void *dst) {
     memcpy(dst, src, 16);
 }
 
-void vec_imm_shiftr64(NO_CPU, const uint8_t amount, union xmm_reg *dst) {
+void vec_imm_shiftl_q128(NO_CPU, const uint8_t amount, union xmm_reg *dst) {
+    if (amount > 63) {
+        zero_xmm(dst);
+    } else {
+        dst->qw[0] <<= amount;
+        dst->qw[1] <<= amount;
+    }
+}
+
+void vec_imm_shiftr_q128(NO_CPU, const uint8_t amount, union xmm_reg *dst) {
     if (amount > 63) {
         zero_xmm(dst);
     } else {
@@ -66,9 +76,54 @@ void vec_imm_shiftr64(NO_CPU, const uint8_t amount, union xmm_reg *dst) {
     }
 }
 
+void vec_shiftl_q128(NO_CPU, union xmm_reg *amount, union xmm_reg *dst) {
+    uint64_t amount_qw = amount->qw[0];
+
+    if (amount_qw > 63) {
+        zero_xmm(dst);
+    } else {
+        dst->qw[0] <<= amount_qw;
+        dst->qw[1] <<= amount_qw;
+    }
+}
+
+void vec_shiftr_q128(NO_CPU, union xmm_reg *amount, union xmm_reg *dst) {
+    uint64_t amount_qw = amount->qw[0];
+
+    if (amount_qw > 63) {
+        zero_xmm(dst);
+    } else {
+        dst->qw[0] >>= amount_qw;
+        dst->qw[1] >>= amount_qw;
+    }
+}
+
+void vec_and128(NO_CPU, union xmm_reg *src, union xmm_reg *dst) {
+    dst->qw[0] &= src->qw[0];
+    dst->qw[1] &= src->qw[1];
+}
+void vec_or128(NO_CPU, union xmm_reg *src, union xmm_reg *dst) {
+    dst->qw[0] |= src->qw[0];
+    dst->qw[1] |= src->qw[1];
+}
 void vec_xor128(NO_CPU, union xmm_reg *src, union xmm_reg *dst) {
     dst->qw[0] ^= src->qw[0];
     dst->qw[1] ^= src->qw[1];
+}
+
+void vec_add_b128(NO_CPU, union xmm_reg *src, union xmm_reg *dst) {
+    for (unsigned i = 0; i < array_size(src->u8); i++)
+        dst->u8[i] += src->u8[i];
+}
+void vec_add_q128(NO_CPU, union xmm_reg *src, union xmm_reg *dst) {
+    dst->qw[0] += src->qw[0];
+    dst->qw[1] += src->qw[1];
+}
+
+void vec_min_ub128(NO_CPU, union xmm_reg *src, union xmm_reg *dst) {
+    for (unsigned i = 0; i < array_size(src->u8); i++)
+        if (src->u8[i] < dst->u8[i])
+            dst->u8[i] = src->u8[i];
 }
 
 void vec_fadds64(NO_CPU, const double *src, double *dst) {
@@ -87,9 +142,52 @@ void vec_fdivs64(NO_CPU, const double *src, double *dst) {
 void vec_cvtsi2sd32(NO_CPU, const uint32_t *src, double *dst) {
     *dst = *src;
 }
-void vec_cvtsd2si64(NO_CPU, const double *src, uint32_t *dst) {
+void vec_cvttsd2si64(NO_CPU, const double *src, uint32_t *dst) {
     *dst = *src;
 }
 void vec_cvtsd2ss64(NO_CPU, const double *src, float *dst) {
     *dst = *src;
+}
+
+void vec_unpack_bw128(NO_CPU, const union xmm_reg *src, union xmm_reg *dst) {
+    for (int i = 7; i >= 0; i--) {
+        dst->u8[i*2 + 1] = src->u8[i];
+        dst->u8[i*2] = dst->u8[i];
+    }
+}
+void vec_unpack_qdq128(NO_CPU, const union xmm_reg *src, union xmm_reg *dst) {
+    dst->qw[1] = src->qw[0];
+}
+
+void vec_shuffle_lw128(NO_CPU, const union xmm_reg *src, union xmm_reg *dst, uint8_t encoding) {
+    union xmm_reg src_copy = *src;
+    for (int i = 0; i < 4; i++)
+        dst->u16[i] = src_copy.u16[(encoding >> (i*2)) % 4];
+    dst->qw[1] = src->qw[1];
+}
+void vec_shuffle_d128(NO_CPU, const union xmm_reg *src, union xmm_reg *dst, uint8_t encoding) {
+    union xmm_reg src_copy = *src;
+    for (int i = 0; i < 4; i++)
+        dst->u32[i] = src_copy.u32[(encoding >> (i*2)) % 4];
+}
+
+void vec_compare_eqb128(NO_CPU, const union xmm_reg *src, union xmm_reg *dst) {
+    for (unsigned i = 0; i < array_size(src->u8); i++)
+        dst->u8[i] = dst->u8[i] == src->u8[i] ? ~0 : 0;
+}
+void vec_compare_eqd128(NO_CPU, const union xmm_reg *src, union xmm_reg *dst) {
+    for (unsigned i = 0; i < array_size(src->u32); i++)
+        dst->u32[i] = dst->u32[i] == src->u32[i] ? ~0 : 0;
+}
+
+void vec_movmask_b128(NO_CPU, const union xmm_reg *src, uint32_t *dst) {
+    *dst = 0;
+    for (unsigned i = 0; i < array_size(src->u8); i++) {
+        if (src->u8[i] & (1 << 7))
+            *dst |= 1 << i;
+    }
+}
+
+void vec_extract_w128(NO_CPU, const union xmm_reg *src, uint32_t *dst, uint8_t index) {
+    *dst = src->u16[index % 8];
 }

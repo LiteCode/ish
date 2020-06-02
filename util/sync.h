@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <setjmp.h>
 #include "misc.h"
+#include "debug.h"
 
 // locks, implemented using pthread
 
@@ -40,12 +41,12 @@ static inline void __lock(lock_t *lock, __attribute__((unused)) const char *file
 }
 #define lock(lock) __lock(lock, __FILE__, __LINE__)
 static inline void unlock(lock_t *lock) {
-    pthread_mutex_unlock(&lock->m);
 #if LOCK_DEBUG
     lock->debug = (struct lock_debug) {};
 #endif
+    lock->owner = zero_init(pthread_t);
+    pthread_mutex_unlock(&lock->m);
 }
-#define unlock(lock) pthread_mutex_unlock(&(lock)->m)
 
 // conditions, implemented using pthread conditions but hacked so you can also
 // be woken by a signal
@@ -117,5 +118,11 @@ static inline int sigunwind_start() {
 static inline void sigunwind_end() {
     should_unwind = false;
 }
+
+#if __APPLE__
+#define set_thread_name(threadname) pthread_setname_np(threadname)
+#else
+#define set_thread_name(threadname) pthread_setname_np(pthread_self(), threadname)
+#endif
 
 #endif

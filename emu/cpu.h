@@ -18,10 +18,11 @@ union mm_reg {
 };
 union xmm_reg {
     qword_t qw[2];
-    dword_t dw[4];
+    uint32_t u32[4];
+    uint16_t u16[8];
+    uint8_t u8[16];
     float f32[4];
     double f64[2];
-    // TODO more forms
 };
 static_assert(sizeof(union xmm_reg) == 16, "xmm_reg size");
 static_assert(sizeof(union mm_reg) == 8, "mm_reg size");
@@ -218,8 +219,8 @@ static inline const char *reg32_name(enum reg32 reg) {
         case reg_ebp: return "ebp";
         case reg_esi: return "esi";
         case reg_edi: return "edi";
-        case reg_none: return "?";
     }
+    return "?";
 }
 
 #endif
