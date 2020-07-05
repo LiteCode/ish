@@ -524,10 +524,14 @@ dword_t sys_ioctl(fd_t f, dword_t cmd, dword_t arg) {
     switch (cmd) {
         case FIONBIO_:
             return set_nonblock(fd, arg);
-        default:
-            return fd_ioctl(fd, cmd, arg);
+        case FIOCLEX_:
+            bit_set(f, current->files->cloexec);
+            return 0;
+        case FIONCLEX_:
+            bit_clear(f, current->files->cloexec);
+            return 0;
     }
-    return 0;
+    return fd_ioctl(fd, cmd, arg);
 }
 
 dword_t sys_getcwd(addr_t buf_addr, dword_t size) {
@@ -959,6 +963,9 @@ dword_t sys_sendfile(fd_t UNUSED(out_fd), fd_t UNUSED(in_fd), addr_t UNUSED(offs
     return _EINVAL;
 }
 dword_t sys_sendfile64(fd_t UNUSED(out_fd), fd_t UNUSED(in_fd), addr_t UNUSED(offset_addr), dword_t UNUSED(count)) {
+    return _EINVAL;
+}
+dword_t sys_splice(fd_t UNUSED(in_fd), addr_t UNUSED(in_off_addr), fd_t UNUSED(out_fd), addr_t UNUSED(out_off_addr), dword_t UNUSED(count), dword_t UNUSED(flags)) {
     return _EINVAL;
 }
 dword_t sys_copy_file_range(fd_t UNUSED(in_fd), addr_t UNUSED(in_off), fd_t UNUSED(out_fd),

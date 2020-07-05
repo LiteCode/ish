@@ -1,3 +1,4 @@
+#include <string.h>
 #include "debug.h"
 #include "kernel/calls.h"
 #include "emu/interrupt.h"
@@ -137,6 +138,8 @@ syscall_t syscall_table[] = {
     [200] = (syscall_t) sys_getgid32,
     [201] = (syscall_t) sys_geteuid32,
     [202] = (syscall_t) sys_getegid32,
+    [203] = (syscall_t) sys_setreuid,
+    [204] = (syscall_t) sys_setregid,
     [205] = (syscall_t) sys_getgroups,
     [206] = (syscall_t) sys_setgroups,
     [207] = (syscall_t) sys_fchown32,
@@ -167,6 +170,7 @@ syscall_t syscall_table[] = {
     [258] = (syscall_t) sys_set_tid_address,
     [259] = (syscall_t) sys_timer_create,
     [260] = (syscall_t) sys_timer_settime,
+    [263] = (syscall_t) sys_timer_delete,
     [264] = (syscall_t) sys_clock_settime,
     [265] = (syscall_t) sys_clock_gettime,
     [266] = (syscall_t) sys_clock_getres,
@@ -196,6 +200,7 @@ syscall_t syscall_table[] = {
     [309] = (syscall_t) sys_ppoll,
     [311] = (syscall_t) sys_set_robust_list,
     [312] = (syscall_t) sys_get_robust_list,
+    [313] = (syscall_t) sys_splice,
     [319] = (syscall_t) sys_epoll_pwait,
     [320] = (syscall_t) sys_utimensat,
     [322] = (syscall_t) sys_timerfd_create,
@@ -209,6 +214,7 @@ syscall_t syscall_table[] = {
     [332] = (syscall_t) syscall_stub, // inotify_init1
     [340] = (syscall_t) sys_prlimit64,
     [345] = (syscall_t) sys_sendmmsg,
+    [352] = (syscall_t) syscall_stub, // sched_getattr
     [353] = (syscall_t) sys_renameat2,
     [355] = (syscall_t) sys_getrandom,
     [359] = (syscall_t) sys_socket,
@@ -234,7 +240,6 @@ syscall_t syscall_table[] = {
 #define NUM_SYSCALLS (sizeof(syscall_table) / sizeof(syscall_table[0]))
 
 void handle_interrupt(int interrupt) {
-    TRACE_(instr, "\n");
     struct cpu_state *cpu = &current->cpu;
     if (interrupt == INT_SYSCALL) {
         unsigned syscall_num = cpu->eax;
@@ -284,9 +289,26 @@ void handle_interrupt(int interrupt) {
     unlock(&group->lock);
 }
 
-void dump_stack() {
+void dump_maps() {
+    extern void proc_maps_dump(struct task *task, struct proc_data *buf);
+    struct proc_data buf = {};
+    proc_maps_dump(current, &buf);
+    // go a line at a time because it can be fucking enormous
+    char *orig_data = buf.data;
+    while (buf.size > 0) {
+        size_t chunk_size = buf.size;
+        if (chunk_size > 1024)
+            chunk_size = 1024;
+        printk("%.*s", chunk_size, buf.data);
+        buf.data += chunk_size;
+        buf.size -= chunk_size;
+    }
+    free(orig_data);
+}
+
+void dump_stack(int lines) {
     printk("stack at %x, base at %x, ip at %x\n", current->cpu.esp, current->cpu.ebp, current->cpu.eip);
-    for (int i = 0; i < 64; i++) {
+    for (int i = 0; i < lines*8; i++) {
         dword_t stackword;
         if (user_get(current->cpu.esp + (i * 4), stackword))
             break;

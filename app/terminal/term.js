@@ -21,9 +21,12 @@ lib.init(function() {
 var termCss = `
 x-screen {
     background: transparent !important;
+    overflow: hidden !important;
+    -webkit-tap-highlight-color: transparent;
 }
-x-screen::-webkit-scrollbar {
-    display: none;
+x-row {
+  text-rendering: optimizeLegibility;
+  font-variant-ligatures: normal;
 }
 `;
 

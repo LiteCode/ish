@@ -149,6 +149,7 @@ dword_t sys_umask(dword_t mask);
 
 dword_t sys_sendfile(fd_t out_fd, fd_t in_fd, addr_t offset_addr, dword_t count);
 dword_t sys_sendfile64(fd_t out_fd, fd_t in_fd, addr_t offset_addr, dword_t count);
+dword_t sys_splice(fd_t in_fd, addr_t in_off_addr, fd_t out_fd, addr_t out_off_addr, dword_t count, dword_t flags);
 dword_t sys_copy_file_range(fd_t in_fd, addr_t in_off, fd_t out_fd, addr_t out_off, dword_t len, uint_t flags);
 
 dword_t sys_statfs(addr_t path_addr, addr_t buf_addr);
@@ -186,6 +187,8 @@ uid_t_ sys_getegid32(void);
 uid_t_ sys_getegid(void);
 dword_t sys_setresuid(uid_t_ ruid, uid_t_ euid, uid_t_ suid);
 dword_t sys_setresgid(uid_t_ rgid, uid_t_ egid, uid_t_ sgid);
+int_t sys_setreuid(uid_t_ ruid, uid_t_ euid);
+int_t sys_setregid(uid_t_ rgid, uid_t_ egid);
 int_t sys_getresuid(addr_t ruid_addr, addr_t euid_addr, addr_t suid_addr);
 int_t sys_getresgid(addr_t rgid_addr, addr_t egid_addr, addr_t sgid_addr);
 int_t sys_getgroups(dword_t size, addr_t list);
